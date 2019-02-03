@@ -1,0 +1,8 @@
+[package]
+name = "optim-mo"
+version = "0.1.0"
+authors = ["Sebastien Gadot <>"]
+edition = "2018"
+
+[dependencies]
+rand = "0.6"
