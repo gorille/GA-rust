@@ -1,55 +1,52 @@
 use crate::genetics::individual::Individual;
+use crate::genetics::selector::Selector;
+use rayon::prelude::*;
 
+#[derive(Clone, Default)]
 pub struct Genome {
-    size: u16,
-    father: Individual,
-    mother: Individual,
+    size: usize,
+    population: Vec<Individual>
 }
 
 impl Genome {
     /// generates **size** random individuals and keep the best ones for reproduction
-    pub fn new(size: u16) -> Genome{
-        let mut remaining = size - 2;
-        let mut father = Individual::new();
-        let mut mother = Individual::new();
-
-        let mut father_score = father.score();
-        let mut mother_score = mother.score();
-
-        while remaining != 0 {
-            let individual = Individual::new();
-            let score = individual.score();
-            if score < father_score {
-                mother = father;
-                father = individual;
-                father_score = score;
-                mother_score = father_score;
-            } else if score < mother_score {
-                mother = individual;
-                mother_score = score;
-            }
-            remaining = remaining -1;
-        }
-
-        Genome {size, father, mother}
+    pub fn new(size: usize) -> Genome{
+        let mut population: Vec<Individual> = Vec::with_capacity(size);    
+        population.par_extend((0..size).into_par_iter().map( |_i|  Individual::new() ));
+        // score pop for the first time
+        population.par_sort_by(|first, second| first.score().cmp(&second.score()));
+        Genome {size, population}
     }
 
     /// creates an new generation by repeatedly breading the previous parents
-    pub fn evolve(self, generations: u16, callback_interval: u16) -> Individual {
-        let mut current_gen = self;
-        let mut remaining = generations;
-        while remaining > 0 {
-            remaining = remaining -1;
-            //current_gen = Genome::breed(current_gen);
+    pub fn evolve(self, generations: usize, callback_interval: usize, callback: &Fn(usize, &Vec<Individual>)) -> Individual {
+        let mut population: Vec<Individual> = self.population;
+        let selector = Selector::new(&population);
+
+        for i in 1..generations { // iterates over generations and breed !!!!
+
+            // select parents for the next generation
+            let parents = selector.select_parents(population);
+            population = Vec::with_capacity(self.size);
+
+            // include them in the pool
+            population.push(parents.0.clone());
+            population.push(parents.1.clone());
+
+            // complete the rest of the pool
+            let remaining = (self.size -2) / 2;
+            population.par_extend((0..remaining).into_par_iter().flat_map(|_i| {
+                Individual::breed(&parents.0, &parents.1)
+            }));
+
+            // sort the result by score
+            population.par_sort_by(|first, second| first.score().cmp(&second.score()));
+            
+            if i % callback_interval == 0 {
+                callback(i, &population);
+            }
         }
-        current_gen.father
-    }
 
-    fn breed(current_gen: Genome) -> Individual {
-        unimplemented!();
-    }
-
-    fn accumulate(start: Genome, generator: Individual) {
-        unimplemented!();
+        population[0].clone()
     }
 }
